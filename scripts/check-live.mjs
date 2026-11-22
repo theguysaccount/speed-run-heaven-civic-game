@@ -28,13 +28,27 @@ const note = (ok, message) => {
   if (!ok) problems.push(message);
 };
 
+// GitHub Pages now and then answers one request with a 5xx or drops it. Those are retried twice, 10 and 20 s apart,
+// before they count, so a single CDN hiccup does not open an alert. A real outage still fails.
 async function get(url) {
-  const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}check=${Date.now()}`, {
-    headers: { "User-Agent": UA, "Cache-Control": "no-cache" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(30_000),
-  });
-  return { status: response.status, text: await response.text(), type: response.headers.get("content-type") || "" };
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}check=${Date.now()}`, {
+        headers: { "User-Agent": UA, "Cache-Control": "no-cache" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (response.status >= 500 && attempt < 3) {
+        await response.body?.cancel();
+        await new Promise((resolve) => setTimeout(resolve, attempt * 10_000));
+        continue;
+      }
+      return { status: response.status, text: await response.text(), type: response.headers.get("content-type") || "" };
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 10_000));
+    }
+  }
 }
 
 // Right after a deploy the CDN can serve the previous build for a few minutes.
