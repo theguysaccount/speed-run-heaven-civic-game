@@ -1,0 +1,35 @@
+{
+  "name": "speed-run-heaven",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Speed Run Heaven: a free incremental browser game about accountable public AI and robotics. A work of fiction.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --test tests/engine.test.ts",
+    "test:html": "node --test tests/rendered-html.test.mjs",
+    "test": "npm run typecheck && npm run test:unit && npm run build && npm run test:html",
+    "e2e": "node scripts/e2e.mjs",
+    "serve": "node scripts/serve.mjs",
+    "screens": "node scripts/screens.mjs",
+    "check:live": "node scripts/check-live.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

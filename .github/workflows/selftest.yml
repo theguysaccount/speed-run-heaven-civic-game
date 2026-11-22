@@ -1,0 +1,90 @@
+# Weekly self-test: unit tests, the rendered-HTML test and the scripted playthrough on a fresh build of main,
+# then the same playthrough and a health check on the live site. If the live site is not serving the latest
+# game, it asks the Deploy workflow for a fresh deploy. A failure opens (or comments on) one ops-alert issue;
+# a later pass closes it. The keep-alive runs whatever happens, so the schedule is never disabled.
+name: Weekly self-test
+
+on:
+  schedule:
+    - cron: "43 7 * * 3" # Wednesdays 07:43 UTC; any day or hour works, the job is safe to re-run
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+concurrency:
+  group: selftest
+  cancel-in-progress: false
+
+env:
+  SITE_URL: ${{ vars.SITE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+  STAGED: ${{ vars.STAGED }}
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Type check and unit tests
+        run: npm run typecheck && npm run test:unit
+      - name: Build and rendered-HTML tests
+        run: npm run build && npm run test:html
+      - name: Scripted playthrough on a fresh build
+        run: npm run e2e
+      - name: Live site health
+        id: live
+        run: node scripts/check-live.mjs "$SITE_URL"
+      - name: Scripted playthrough on the live site
+        run: node scripts/e2e.mjs "$SITE_URL/"
+      - name: The live site runs the latest game
+        if: always()
+        run: |
+          live=$(curl -fsS "$SITE_URL/build.json?check=$(date +%s)" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).build)}catch{console.log("")}})' || true)
+          last=$(git log -1 --format=%H -- src public scripts tests site.json package.json package-lock.json tsconfig.json .github/workflows/pages.yml)
+          echo "live build: ${live:-unreadable}; last change to the game: $last"
+          if [ -n "$live" ] && git cat-file -e "$live^{commit}" 2>/dev/null && git merge-base --is-ancestor "$last" "$live"; then
+            echo "The live site is current."
+          else
+            echo "::warning::The live site is not serving the latest game; asking the Deploy workflow for a fresh deploy."
+            gh workflow run pages.yml --ref main
+          fi
+      - name: Record a failure in one issue
+        if: failure()
+        run: |
+          gh label create ops-alert --color B42318 --description "Automated health check failed" 2>/dev/null || true
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          open=$(gh issue list --label ops-alert --state open --json number --jq '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Still failing: $run"
+          else
+            gh issue create --label ops-alert --title "Weekly self-test failed" --body "The weekly self-test failed: $run. OPERATIONS.md explains each check and what to do."
+          fi
+      - name: Close a resolved alert
+        if: success()
+        run: |
+          for n in $(gh issue list --label ops-alert --state open --json number --jq '.[].number' 2>/dev/null); do
+            gh issue close "$n" --comment "Passing again: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          done
+
+  keepalive:
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Keep scheduled workflows enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/keepalive.sh
