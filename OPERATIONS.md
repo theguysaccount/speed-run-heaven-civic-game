@@ -48,16 +48,20 @@ None of these are needed for the game to work.
 
 ### 1. Custom domain (the base address is one setting: `SITE_URL`)
 
-Candidates from the 2026-08-30 portfolio: `kingdomspeedrun.com` (the best fit), plus `heavenstate.org` and `heavenlystate.com` as redirects. All three showed Namecheap parking pages on 2026-11-10. DNS is managed at Namecheap (Domain List → domain → Advanced DNS). The "domain rollout" session sets domains up; nothing here changes DNS.
+Candidates from the 2026-08-30 portfolio:
+- `kingdomspeedrun.com` is the best fit. Since 2026-11-22 it serves another site, a speedrun split calculator. Under the build-on-top rule, this game takes a subdomain: `play.kingdomspeedrun.com`. Leave the apex alone.
+- `heavenstate.org` and `heavenlystate.com` are listed as redirects. Both still showed Namecheap parking pages on 2026-11-22.
+
+DNS is managed at Namecheap (Domain List → domain → Advanced DNS). The "domain rollout" session sets domains up; nothing here changes DNS.
 
 Steps, in this order, so canonicals never point at an address that does not answer yet:
 
-1. **DNS at Namecheap.** For a subdomain such as `play.kingdomspeedrun.com`, add a record `CNAME play → theguysaccount.github.io.` For the apex instead, use these records:
+1. **DNS at Namecheap.** Add one record, `CNAME play → theguysaccount.github.io.`, in the kingdomspeedrun.com zone, and change no other record.
+
+   Only if Jack chooses a parked domain's apex instead (for example heavenstate.org), replace that host's parking records with:
    - `A @` → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - `AAAA @` → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
    - `CNAME www` → `theguysaccount.github.io.`
-
-   In both cases, remove Namecheap's parking records for the same host.
 2. **Tell Pages the domain:**
    `~/.local/bin/gh api -X PUT repos/theguysaccount/speed-run-heaven-civic-game/pages -f cname=play.kingdomspeedrun.com`
    You can also do this in Settings → Pages → Custom domain. The site deploys from a workflow, so a CNAME file is not used.
